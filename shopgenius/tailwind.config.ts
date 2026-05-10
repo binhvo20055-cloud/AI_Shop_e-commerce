@@ -10,6 +10,39 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))",
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+        primary: {
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
+        },
+        secondary: {
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
+        },
+        destructive: {
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
+        },
+        muted: {
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--muted-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+          50: "#fdf4ff",
+          100: "#fae8ff",
+          500: "#a855f7",
+          600: "#9333ea",
+        },
+        card: {
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
+        },
         brand: {
           50: "#f0f9ff",
           100: "#e0f2fe",
@@ -22,16 +55,18 @@ const config: Config = {
           800: "#075985",
           900: "#0c4a6e",
         },
-        accent: {
-          50: "#fdf4ff",
-          100: "#fae8ff",
-          500: "#a855f7",
-          600: "#9333ea",
-        },
+      },
+      borderColor: {
+        DEFAULT: "hsl(var(--border))",
+        border: "hsl(var(--border))",
       },
       fontFamily: {
         sans: ["var(--font-inter)", "system-ui", "sans-serif"],
-        display: ["var(--font-cal-sans)", "system-ui", "sans-serif"],
+      },
+      borderRadius: {
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
       },
       animation: {
         "fade-in": "fadeIn 0.3s ease-in-out",

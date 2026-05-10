@@ -1,79 +1,207 @@
-const BRIA_BASE_URL = "https://engine.prod.bria-api.com/v1";
+const BRIA_BASE_URL = "https://engine.prod.bria-api.com";
+const BRIA_HEADERS = {
+  "Content-Type": "application/json",
+  "User-Agent": "BriaSkills/1.3.0",
+};
 
-interface BriaRemoveBgResponse {
-  result_url: string;
+function getApiToken(): string {
+  const token = process.env.BRIA_API_TOKEN;
+  if (!token) throw new Error("BRIA_API_TOKEN is not set in environment variables");
+  return token;
 }
 
-interface BriaLifeshotResponse {
-  result_url: string;
+// ─── POLLING ─────────────────────────────────────────────────────────────────
+
+interface BriaStatusResponse {
+  status: "IN_PROGRESS" | "COMPLETED" | "FAILED";
+  result?: { image_url?: string; urls?: string[] };
+  error?: string;
 }
 
 /**
- * Remove background from a product image using Bria AI
+ * Poll a Bria async job until COMPLETED or FAILED.
+ * Max wait: ~2 minutes (60 attempts × 2s).
  */
-export async function removeBackground(imageUrl: string): Promise<string> {
-  const response = await fetch(`${BRIA_BASE_URL}/background/remove`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      api_token: process.env.BRIA_API_TOKEN!,
-    },
-    body: JSON.stringify({ image_url: imageUrl }),
-  });
+async function pollStatus(statusUrl: string): Promise<string> {
+  const apiToken = getApiToken();
 
-  if (!response.ok) {
-    throw new Error(`Bria removeBackground failed: ${response.statusText}`);
+  for (let i = 0; i < 60; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+
+    const res = await fetch(statusUrl, {
+      headers: { ...BRIA_HEADERS, api_token: apiToken },
+    });
+
+    if (!res.ok) throw new Error(`Bria poll failed: ${res.statusText}`);
+
+    const data: BriaStatusResponse = await res.json();
+
+    if (data.status === "COMPLETED") {
+      const url = data.result?.image_url ?? data.result?.urls?.[0];
+      if (!url) throw new Error("Bria returned COMPLETED but no image URL");
+      return url;
+    }
+
+    if (data.status === "FAILED") {
+      throw new Error(`Bria job failed: ${data.error ?? "Unknown error"}`);
+    }
   }
 
-  const data: BriaRemoveBgResponse = await response.json();
-  return data.result_url;
+  throw new Error("Bria job timed out after 2 minutes");
+}
+
+// ─── BACKGROUND REMOVAL ──────────────────────────────────────────────────────
+
+interface BriaAsyncResponse {
+  request_id: string;
+  status_url: string;
 }
 
 /**
- * Generate a lifestyle product shot using Bria AI
+ * Remove background from a product image using Bria RMBG-2.0.
+ * Returns a transparent PNG URL.
+ */
+export async function removeBackground(imageUrl: string): Promise<string> {
+  const apiToken = getApiToken();
+
+  const res = await fetch(`${BRIA_BASE_URL}/v2/image/edit/remove_background`, {
+    method: "POST",
+    headers: { ...BRIA_HEADERS, api_token: apiToken },
+    body: JSON.stringify({ image: imageUrl }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Bria removeBackground failed (${res.status}): ${err}`);
+  }
+
+  const data: BriaAsyncResponse = await res.json();
+  return pollStatus(data.status_url);
+}
+
+// ─── LIFESTYLE SHOT ───────────────────────────────────────────────────────────
+
+/**
+ * Generate a lifestyle product shot by placing the product in a scene.
+ * Input should be a transparent PNG (after removeBackground).
  */
 export async function generateLifestyleShot(
   imageUrl: string,
   prompt: string
 ): Promise<string> {
-  const response = await fetch(`${BRIA_BASE_URL}/product_shot`, {
+  const apiToken = getApiToken();
+
+  const res = await fetch(`${BRIA_BASE_URL}/v1/product/lifestyle_shot_by_text`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      api_token: process.env.BRIA_API_TOKEN!,
-    },
+    headers: { ...BRIA_HEADERS, api_token: apiToken },
     body: JSON.stringify({
-      image_url: imageUrl,
+      image: imageUrl,
       prompt,
       num_results: 1,
     }),
   });
 
-  if (!response.ok) {
-    throw new Error(`Bria generateLifestyleShot failed: ${response.statusText}`);
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Bria lifestyleShot failed (${res.status}): ${err}`);
   }
 
-  const data: BriaLifeshotResponse = await response.json();
-  return data.result_url;
+  const data: BriaAsyncResponse = await res.json();
+  return pollStatus(data.status_url);
+}
+
+// ─── REPLACE BACKGROUND ───────────────────────────────────────────────────────
+
+/**
+ * Replace the background of an image with an AI-generated scene.
+ */
+export async function replaceBackground(
+  imageUrl: string,
+  prompt: string
+): Promise<string> {
+  const apiToken = getApiToken();
+
+  const res = await fetch(`${BRIA_BASE_URL}/v2/image/edit/replace_background`, {
+    method: "POST",
+    headers: { ...BRIA_HEADERS, api_token: apiToken },
+    body: JSON.stringify({ image: imageUrl, prompt }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Bria replaceBackground failed (${res.status}): ${err}`);
+  }
+
+  const data: BriaAsyncResponse = await res.json();
+  return pollStatus(data.status_url);
+}
+
+// ─── UPSCALE ──────────────────────────────────────────────────────────────────
+
+/**
+ * Upscale an image 2x or 4x using Bria Super Resolution.
+ */
+export async function upscaleImage(
+  imageUrl: string,
+  scale: 2 | 4 = 2
+): Promise<string> {
+  const apiToken = getApiToken();
+
+  const res = await fetch(`${BRIA_BASE_URL}/v2/image/edit/increase_resolution`, {
+    method: "POST",
+    headers: { ...BRIA_HEADERS, api_token: apiToken },
+    body: JSON.stringify({ image: imageUrl, scale }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Bria upscale failed (${res.status}): ${err}`);
+  }
+
+  const data: BriaAsyncResponse = await res.json();
+  return pollStatus(data.status_url);
+}
+
+// ─── FULL PRODUCT PIPELINE ────────────────────────────────────────────────────
+
+export interface ProductImagePipelineResult {
+  original: string;
+  noBackground: string;
+  lifestyle?: string;
 }
 
 /**
- * Upscale a product image using Bria AI
+ * Full product image pipeline:
+ * 1. Remove background → transparent PNG
+ * 2. Generate lifestyle shot (optional)
+ *
+ * Returns all intermediate + final URLs.
  */
-export async function upscaleImage(imageUrl: string): Promise<string> {
-  const response = await fetch(`${BRIA_BASE_URL}/image/upscale`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      api_token: process.env.BRIA_API_TOKEN!,
-    },
-    body: JSON.stringify({ image_url: imageUrl }),
-  });
+export async function runProductImagePipeline(
+  imageUrl: string,
+  options: {
+    generateLifestyle?: boolean;
+    lifestylePrompt?: string;
+  } = {}
+): Promise<ProductImagePipelineResult> {
+  const { generateLifestyle = true, lifestylePrompt } = options;
 
-  if (!response.ok) {
-    throw new Error(`Bria upscaleImage failed: ${response.statusText}`);
+  // Step 1: Remove background
+  const noBackground = await removeBackground(imageUrl);
+
+  const result: ProductImagePipelineResult = {
+    original: imageUrl,
+    noBackground,
+  };
+
+  // Step 2: Lifestyle shot (optional)
+  if (generateLifestyle) {
+    const prompt =
+      lifestylePrompt ??
+      "professional product photography, modern minimalist setting, soft natural lighting, clean aesthetic";
+
+    result.lifestyle = await generateLifestyleShot(noBackground, prompt);
   }
 
-  const data: { result_url: string } = await response.json();
-  return data.result_url;
+  return result;
 }

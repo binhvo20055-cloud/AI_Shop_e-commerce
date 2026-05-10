@@ -4,106 +4,433 @@ export type Json =
   | boolean
   | null
   | { [key: string]: Json | undefined }
-  | Json[];
+  | Json[]
 
-export interface Database {
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   public: {
     Tables: {
-      products: {
-        Row: {
-          id: string;
-          created_at: string;
-          updated_at: string;
-          name: string;
-          description: string;
-          price: number;
-          compare_at_price: number | null;
-          stock: number;
-          sku: string | null;
-          category_id: string | null;
-          merchant_id: string;
-          images: string[];
-          processed_images: string[];
-          audio_description_url: string | null;
-          is_active: boolean;
-          metadata: Json;
-        };
-        Insert: Omit<Database["public"]["Tables"]["products"]["Row"], "id" | "created_at" | "updated_at">;
-        Update: Partial<Database["public"]["Tables"]["products"]["Insert"]>;
-      };
       categories: {
         Row: {
-          id: string;
-          name: string;
-          slug: string;
-          parent_id: string | null;
-          image_url: string | null;
-        };
-        Insert: Omit<Database["public"]["Tables"]["categories"]["Row"], "id">;
-        Update: Partial<Database["public"]["Tables"]["categories"]["Insert"]>;
-      };
-      orders: {
-        Row: {
-          id: string;
-          created_at: string;
-          updated_at: string;
-          user_id: string;
-          merchant_id: string;
-          status: "pending" | "confirmed" | "shipped" | "delivered" | "cancelled" | "refunded";
-          total_amount: number;
-          stripe_payment_intent_id: string | null;
-          stripe_invoice_id: string | null;
-          shipping_address: Json;
-          items: Json;
-        };
-        Insert: Omit<Database["public"]["Tables"]["orders"]["Row"], "id" | "created_at" | "updated_at">;
-        Update: Partial<Database["public"]["Tables"]["orders"]["Insert"]>;
-      };
-      reviews: {
-        Row: {
-          id: string;
-          created_at: string;
-          product_id: string;
-          user_id: string;
-          rating: number;
-          comment: string | null;
-          is_verified_purchase: boolean;
-        };
-        Insert: Omit<Database["public"]["Tables"]["reviews"]["Row"], "id" | "created_at">;
-        Update: Partial<Database["public"]["Tables"]["reviews"]["Insert"]>;
-      };
+          id: string
+          image_url: string | null
+          name: string
+          parent_id: string | null
+          slug: string
+        }
+        Insert: {
+          id?: string
+          image_url?: string | null
+          name: string
+          parent_id?: string | null
+          slug: string
+        }
+        Update: {
+          id?: string
+          image_url?: string | null
+          name?: string
+          parent_id?: string | null
+          slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       merchants: {
         Row: {
-          id: string;
-          created_at: string;
-          user_id: string;
-          store_name: string;
-          store_slug: string;
-          description: string | null;
-          logo_url: string | null;
-          stripe_customer_id: string | null;
-          stripe_subscription_id: string | null;
-          subscription_status: "active" | "trialing" | "past_due" | "cancelled" | null;
-          plan: "starter" | "pro" | "enterprise";
-        };
-        Insert: Omit<Database["public"]["Tables"]["merchants"]["Row"], "id" | "created_at">;
-        Update: Partial<Database["public"]["Tables"]["merchants"]["Insert"]>;
-      };
+          created_at: string | null
+          description: string | null
+          id: string
+          logo_url: string | null
+          plan: string
+          store_name: string
+          store_slug: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          subscription_status: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          logo_url?: string | null
+          plan?: string
+          store_name: string
+          store_slug: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          logo_url?: string | null
+          plan?: string
+          store_name?: string
+          store_slug?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          created_at: string | null
+          id: string
+          items: Json
+          merchant_id: string
+          shipping_address: Json
+          status: string
+          stripe_invoice_id: string | null
+          stripe_payment_intent_id: string | null
+          total_amount: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          items: Json
+          merchant_id: string
+          shipping_address: Json
+          status?: string
+          stripe_invoice_id?: string | null
+          stripe_payment_intent_id?: string | null
+          total_amount: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          items?: Json
+          merchant_id?: string
+          shipping_address?: Json
+          status?: string
+          stripe_invoice_id?: string | null
+          stripe_payment_intent_id?: string | null
+          total_amount?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          audio_description_url: string | null
+          category_id: string | null
+          compare_at_price: number | null
+          created_at: string | null
+          description: string
+          id: string
+          images: string[]
+          is_active: boolean
+          merchant_id: string
+          metadata: Json
+          name: string
+          price: number
+          processed_images: string[]
+          sku: string | null
+          stock: number
+          updated_at: string | null
+        }
+        Insert: {
+          audio_description_url?: string | null
+          category_id?: string | null
+          compare_at_price?: number | null
+          created_at?: string | null
+          description: string
+          id?: string
+          images?: string[]
+          is_active?: boolean
+          merchant_id: string
+          metadata?: Json
+          name: string
+          price: number
+          processed_images?: string[]
+          sku?: string | null
+          stock?: number
+          updated_at?: string | null
+        }
+        Update: {
+          audio_description_url?: string | null
+          category_id?: string | null
+          compare_at_price?: number | null
+          created_at?: string | null
+          description?: string
+          id?: string
+          images?: string[]
+          is_active?: boolean
+          merchant_id?: string
+          metadata?: Json
+          name?: string
+          price?: number
+          processed_images?: string[]
+          sku?: string | null
+          stock?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
-          id: string;
-          updated_at: string;
-          full_name: string | null;
-          avatar_url: string | null;
-          email: string;
-          role: "customer" | "merchant" | "admin";
-        };
-        Insert: Omit<Database["public"]["Tables"]["profiles"]["Row"], "updated_at">;
-        Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>;
-      };
-    };
-    Views: Record<string, never>;
-    Functions: Record<string, never>;
-    Enums: Record<string, never>;
-  };
+          avatar_url: string | null
+          email: string
+          full_name: string | null
+          id: string
+          role: string
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          email: string
+          full_name?: string | null
+          id: string
+          role?: string
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          role?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      reviews: {
+        Row: {
+          comment: string | null
+          created_at: string | null
+          id: string
+          is_verified_purchase: boolean
+          product_id: string
+          rating: number
+          user_id: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string | null
+          id?: string
+          is_verified_purchase?: boolean
+          product_id: string
+          rating: number
+          user_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string | null
+          id?: string
+          is_verified_purchase?: boolean
+          product_id?: string
+          rating?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reviews_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      decrement_stock: {
+        Args: { p_product_id: string; p_quantity: number }
+        Returns: undefined
+      }
+      search_products: {
+        Args: {
+          p_query?: string
+          p_category_id?: string
+          p_min_price?: number
+          p_max_price?: number
+          p_sort?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: Array<{
+          id: string
+          name: string
+          description: string
+          price: number
+          compare_at_price: number | null
+          stock: number
+          images: string[]
+          processed_images: string[]
+          audio_description_url: string | null
+          category_id: string | null
+          merchant_id: string
+          created_at: string | null
+          rank: number
+        }>
+      }
+      get_merchant_stats: {
+        Args: { p_merchant_id: string }
+        Returns: Array<{
+          total_products: number
+          active_products: number
+          total_orders: number
+          total_revenue: number
+          avg_order_value: number
+          pending_orders: number
+        }>
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
 }
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never

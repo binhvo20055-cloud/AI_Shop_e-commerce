@@ -1,81 +1,104 @@
-const ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/v1";
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+
+// Server-side singleton
+let _client: ElevenLabsClient | null = null;
+
+export function getElevenLabsClient(): ElevenLabsClient {
+  if (!_client) {
+    _client = new ElevenLabsClient({
+      apiKey: process.env.ELEVENLABS_API_KEY,
+    });
+  }
+  return _client;
+}
 
 /**
- * Convert text to speech using ElevenLabs
- * Returns an audio blob URL
+ * Convert text to speech — returns a Node.js ReadableStream of MP3 audio.
+ * Uses eleven_flash_v2_5 for low-latency multilingual output.
  */
-export async function textToSpeech(
+export async function textToSpeechStream(
   text: string,
   voiceId?: string
-): Promise<string> {
-  const targetVoiceId =
-    voiceId ?? process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID ?? "21m00Tcm4TlvDq8ikWAM";
+): Promise<ReadableStream<Uint8Array>> {
+  const client = getElevenLabsClient();
+  const targetVoiceId = voiceId ?? process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID ?? "JBFqnCBsd6RMkjVDRZzb";
 
-  const response = await fetch(
-    `${ELEVENLABS_BASE_URL}/text-to-speech/${targetVoiceId}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "xi-api-key": process.env.ELEVENLABS_API_KEY!,
-      },
-      body: JSON.stringify({
-        text,
-        model_id: "eleven_multilingual_v2",
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-        },
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`ElevenLabs TTS failed: ${response.statusText}`);
-  }
-
-  const audioBuffer = await response.arrayBuffer();
-  const blob = new Blob([audioBuffer], { type: "audio/mpeg" });
-  return URL.createObjectURL(blob);
-}
-
-/**
- * Speech to text transcription using ElevenLabs
- */
-export async function speechToText(audioBlob: Blob): Promise<string> {
-  const formData = new FormData();
-  formData.append("audio", audioBlob, "recording.webm");
-  formData.append("model_id", "scribe_v1");
-
-  const response = await fetch(`${ELEVENLABS_BASE_URL}/speech-to-text`, {
-    method: "POST",
-    headers: {
-      "xi-api-key": process.env.ELEVENLABS_API_KEY!,
-    },
-    body: formData,
-  });
-
-  if (!response.ok) {
-    throw new Error(`ElevenLabs STT failed: ${response.statusText}`);
-  }
-
-  const data: { text: string } = await response.json();
-  return data.text;
-}
-
-/**
- * List available voices
- */
-export async function getVoices() {
-  const response = await fetch(`${ELEVENLABS_BASE_URL}/voices`, {
-    headers: {
-      "xi-api-key": process.env.ELEVENLABS_API_KEY!,
+  const audioStream = await client.textToSpeech.convert(targetVoiceId, {
+    text,
+    modelId: "eleven_flash_v2_5", // lowest-latency multilingual
+    outputFormat: "mp3_44100_128",
+    voiceSettings: {
+      stability: 0.5,
+      similarityBoost: 0.75,
+      useSpeakerBoost: false,
     },
   });
 
-  if (!response.ok) {
-    throw new Error(`ElevenLabs getVoices failed: ${response.statusText}`);
-  }
+  // Convert Node.js Readable to Web ReadableStream
+  const { Readable } = await import("stream");
+  const nodeStream = audioStream as unknown as NodeJS.ReadableStream;
 
-  return response.json();
+  return new ReadableStream({
+    start(controller) {
+      nodeStream.on("data", (chunk: Buffer) => controller.enqueue(new Uint8Array(chunk)));
+      nodeStream.on("end", () => controller.close());
+      nodeStream.on("error", (err) => controller.error(err));
+    },
+    cancel() {
+      if ("destroy" in nodeStream) (nodeStream as any).destroy();
+    },
+  });
+}
+
+/**
+ * Convert text to speech — returns a Buffer (for saving to storage).
+ */
+export async function textToSpeechBuffer(
+  text: string,
+  voiceId?: string
+): Promise<Buffer> {
+  const client = getElevenLabsClient();
+  const targetVoiceId = voiceId ?? process.env.NEXT_PUBLIC_ELEVENLABS_VOICE_ID ?? "JBFqnCBsd6RMkjVDRZzb";
+
+  const audioStream = await client.textToSpeech.convert(targetVoiceId, {
+    text,
+    modelId: "eleven_flash_v2_5",
+    outputFormat: "mp3_44100_128",
+    voiceSettings: {
+      stability: 0.5,
+      similarityBoost: 0.75,
+      useSpeakerBoost: false,
+    },
+  });
+
+  const chunks: Uint8Array[] = [];
+  // audioStream is a Node.js Readable — iterate it
+  for await (const chunk of audioStream as unknown as AsyncIterable<Uint8Array>) {
+    chunks.push(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+/**
+ * Transcribe audio file using ElevenLabs Scribe.
+ * For server-side file transcription (not realtime).
+ */
+export async function transcribeAudio(audioBlob: Blob): Promise<string> {
+  const client = getElevenLabsClient();
+
+  const transcription = await client.speechToText.convert({
+    file: audioBlob as File,
+    modelId: "scribe_v1",
+  });
+
+  return transcription.text;
+}
+
+/**
+ * List available voices.
+ */
+export async function listVoices() {
+  const client = getElevenLabsClient();
+  const response = await client.voices.getAll();
+  return response.voices;
 }
