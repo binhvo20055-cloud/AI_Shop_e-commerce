@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth } from "@/lib/firebase/admin";
 import { createAdminClient } from "@/lib/supabase/server";
 
 /**
  * POST /api/auth/sync
  * Verifies a Firebase ID token and upserts the user profile in Supabase.
- * Called after Firebase sign-in to keep both systems in sync.
  */
 export async function POST(request: NextRequest) {
   const { idToken } = await request.json();
@@ -14,15 +12,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing idToken" }, { status: 400 });
   }
 
+  // Firebase Admin is optional — gracefully degrade if not configured
+  if (
+    !process.env.FIREBASE_ADMIN_PRIVATE_KEY ||
+    !process.env.FIREBASE_ADMIN_CLIENT_EMAIL
+  ) {
+    return NextResponse.json(
+      { error: "Firebase Admin not configured" },
+      { status: 503 }
+    );
+  }
+
   try {
-    // Verify Firebase token
+    // Dynamic import to avoid build-time crash
+    const { adminAuth } = await import("@/lib/firebase/admin");
     const decoded = await adminAuth.verifyIdToken(idToken);
 
-    // Upsert profile in Supabase
     const supabase = createAdminClient();
-    const { error } = await supabase
-    .from("profiles")
-    .upsert(
+    const { error } = await supabase.from("profiles").upsert(
       {
         id: decoded.uid,
         email: decoded.email ?? "",
